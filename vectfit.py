@@ -16,10 +16,20 @@ All credit goes to Bjorn Gustavsen for his MATLAB implementation, and the follow
      "Macromodeling of Multiport Systems Using a Fast Implementation of
      the Vector Fitting Method", IEEE Microwave and Wireless Components
      Letters, vol. 18, no. 6, pp. 383-385, June 2008.
+
+updated for Python 3 - RXA254, July-2021
+
 """
 __author__ = 'Phil Reinhold'
-from pylab import *
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+#from pylab import *
 from numpy.linalg import eigvals, lstsq
+
+
+plt.style.use('BodePlot.mplstyle')
 
 def cc(z):
     return z.conjugate()
@@ -35,10 +45,10 @@ def vectfit_step(f, s, poles):
         note: All complex poles must come in sequential complex conjugate pairs
     returns adjusted poles
     """
-    N = len(poles)
+    N  = len(poles)
     Ns = len(s)
 
-    cindex = zeros(N)
+    cindex = np.zeros(N)
     # cindex is:
     #   - 0 for real poles
     #   - 1 for the first of a complex-conjugate pair
@@ -52,7 +62,7 @@ def vectfit_step(f, s, poles):
                 cindex[i] = 2
 
     # First linear equation to solve. See Appendix A
-    A = zeros((Ns, 2*N+2), dtype=np.complex64)
+    A = np.zeros((Ns, 2*N+2), dtype=np.complex64)
     for i, p in enumerate(poles):
         if cindex[i] == 0:
             A[:, i] = 1/(s - p)
@@ -65,13 +75,13 @@ def vectfit_step(f, s, poles):
 
         A [:, N+2+i] = -A[:, i] * f
 
-    A[:, N] = 1
+    A[:, N]   = 1
     A[:, N+1] = s
 
     # Solve Ax == b using pseudo-inverse
     b = f
-    A = vstack((real(A), imag(A)))
-    b = concatenate((real(b), imag(b)))
+    A = np.vstack((np.real(A), np.imag(A)))
+    b = np.concatenate((np.real(b), np.imag(b)))
     x, residuals, rnk, s = lstsq(A, b, rcond=-1)
 
     residues = x[:N]
@@ -82,33 +92,33 @@ def vectfit_step(f, s, poles):
     x = x[-N:]
 
     # Calculation of zeros: Appendix B
-    A = diag(poles)
-    b = ones(N)
+    A = np.diag(poles)
+    b = np.ones(N)
     c = x
     for i, (ci, p) in enumerate(zip(cindex, poles)):
         if ci == 1:
-            x, y = real(p), imag(p)
+            x, y = np.real(p), np.imag(p)
             A[i, i] = A[i+1, i+1] = x
             A[i, i+1] = -y
             A[i+1, i] = y
             b[i] = 2
             b[i+1] = 0
             #cv = c[i]
-            #c[i,i+1] = real(cv), imag(cv)
+            #c[i,i+1] = np.real(cv), np.imag(cv)
 
-    H = A - outer(b, c)
-    H = real(H)
-    new_poles = sort(eigvals(H))
-    unstable = real(new_poles) > 0
-    new_poles[unstable] -= 2*real(new_poles)[unstable]
+    H = A - np.outer(b, c)
+    H = np.real(H)
+    new_poles = np.sort(eigvals(H))
+    unstable = np.real(new_poles) > 0
+    new_poles[unstable] -= 2*np.real(new_poles)[unstable]
     return new_poles
 
 # Dear gods of coding style, I sincerely apologize for the following copy/paste
 def calculate_residues(f, s, poles, rcond=-1):
     Ns = len(s)
-    N = len(poles)
+    N  = len(poles)
 
-    cindex = zeros(N)
+    cindex = np.zeros(N)
     for i, p in enumerate(poles):
         if p.imag != 0:
             if i == 0 or cindex[i-1] != 1:
@@ -118,7 +128,7 @@ def calculate_residues(f, s, poles, rcond=-1):
                 cindex[i] = 2
 
     # use the new poles to extract the residues
-    A = zeros((Ns, N+2), dtype=np.complex128)
+    A = np.zeros((Ns, N+2), dtype=np.complex128)
     for i, p in enumerate(poles):
         if cindex[i] == 0:
             A[:, i] = 1/(s - p)
@@ -132,13 +142,13 @@ def calculate_residues(f, s, poles, rcond=-1):
     A[:, N] = 1
     A[:, N+1] = s
     # Solve Ax == b using pseudo-inverse
-    b = f
-    A = vstack((real(A), imag(A)))
-    b = concatenate((real(b), imag(b)))
+    b  = f
+    A  = np.vstack((np.real(A), np.imag(A)))
+    b  = np.concatenate((np.real(b), np.imag(b)))
     cA = np.linalg.cond(A)
     if cA > 1e13:
-        print 'Warning!: Ill Conditioned Matrix. Consider scaling the problem down'
-        print 'Cond(A)', cA
+        print('Warning!: Ill Conditioned Matrix. Consider scaling the problem down')
+        print('Cond(A)', cA)
     x, residuals, rnk, s = lstsq(A, b, rcond=rcond)
 
     # Recover complex values
@@ -156,20 +166,21 @@ def calculate_residues(f, s, poles, rcond=-1):
 
 def print_params(poles, residues, d, h):
     cfmt = "{0.real:g} + {0.imag:g}j"
-    print "poles: " + ", ".join(cfmt.format(p) for p in poles)
-    print "residues: " + ", ".join(cfmt.format(r) for r in residues)
-    print "offset: {:g}".format(d)
-    print "slope: {:g}".format(h)
+    print("poles: " + ", ".join(cfmt.format(p) for p in poles))
+    print("residues: " + ", ".join(cfmt.format(r) for r in residues))
+    print("offset: {:g}".format(d))
+    print("slope: {:g}".format(h))
 
-def vectfit_auto(f, s, n_poles=10, n_iter=10, show=False,
-                 inc_real=False, loss_ratio=1e-2, rcond=-1, track_poles=False):
-    w = imag(s)
-    pole_locs = linspace(w[0], w[-1], n_poles+2)[1:-1]
-    lr = loss_ratio
-    init_poles = poles = concatenate([[p*(-lr + 1j), p*(-lr - 1j)] for p in pole_locs])
+def vectfit_auto(f, s, n_poles = 10, n_iter = 10, printparams = False,
+                 inc_real = False, loss_ratio = 1e-2, rcond = -1, track_poles = False):
+
+    w          = np.imag(s)
+    pole_locs  = np.linspace(w[0], w[-1], n_poles+2)[1:-1]
+    lr         = loss_ratio
+    init_poles = poles = np.concatenate([[p*(-lr + 1j), p*(-lr - 1j)] for p in pole_locs])
 
     if inc_real:
-        poles = concatenate((poles, [1]))
+        poles = np.concatenate((poles, [1]))
 
     poles_list = []
     for _ in range(n_iter):
@@ -181,21 +192,32 @@ def vectfit_auto(f, s, n_poles=10, n_iter=10, show=False,
     if track_poles:
         return poles, residues, d, h, np.array(poles_list)
 
-    print_params(poles, residues, d, h)
+    if printparams:
+        print_params(poles, residues, d, h)
+
     return poles, residues, d, h
 
-def vectfit_auto_rescale(f, s, **kwargs):
-    s_scale = abs(s[-1])
-    f_scale = abs(f[-1])
-    print 'SCALED'
+
+def vectfit_auto_rescale(f, s, printparams=False, **kwargs):
+    s_scale = np.abs(s[-1])
+    f_scale = np.abs(f[-1])
+
+    if printparams:
+        print('SCALED')
+        
     poles_s, residues_s, d_s, h_s = vectfit_auto(f / f_scale, s / s_scale, **kwargs)
     poles = poles_s * s_scale
     residues = residues_s * f_scale * s_scale
     d = d_s * f_scale
     h = h_s * f_scale / s_scale
-    print 'UNSCALED'
-    print_params(poles, residues, d, h)
+
+    if printparams:
+        print('UNSCALED')
+        print_params(poles, residues, d, h)
     return poles, residues, d, h
+
+
+
 
 if __name__ == '__main__':
     test_s = 1j*np.linspace(1, 1e5, 800)
@@ -226,15 +248,25 @@ if __name__ == '__main__':
     test_d = .2
     test_h = 2e-5
 
-    test_f = sum(c/(test_s - a) for c, a in zip(test_residues, test_poles))
+    test_f  = sum(c/(test_s - a) for c, a in zip(test_residues, test_poles))
     test_f += test_d + test_h*test_s
     vectfit_auto(test_f, test_s)
 
     poles, residues, d, h = vectfit_auto_rescale(test_f, test_s)
     fitted = model(test_s, poles, residues, d, h)
-    figure()
-    plot(test_s.imag, test_f.real)
-    plot(test_s.imag, test_f.imag)
-    plot(test_s.imag, fitted.real)
-    plot(test_s.imag, fitted.imag)
-    show()
+
+    ff = test_s.imag / 2 / np.pi
+    
+    fig,ax = plt.subplots(2,1,sharex=True)
+    ax[0].loglog(ff, np.abs(test_f), ls='', marker='.', label='Data')
+    ax[0].loglog(ff, np.abs(fitted), alpha=0.3, label='Fit')
+    ax[0].set_ylabel('Mag')
+    ax[0].legend()
+    
+    ax[1].semilogx(ff, np.angle(test_f, deg=True),  ls='', marker='.')
+    ax[1].semilogx(ff, np.angle(fitted, deg=True), alpha = 0.3)
+    ax[1].set_ylabel('Phase [deg]')
+    ax[1].set_xlabel('Frequency [Hz]')
+    
+    plt.savefig("test_vectfit.pdf", bbox_inches='tight')
+    #plt.show()
