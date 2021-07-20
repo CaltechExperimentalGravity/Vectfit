@@ -61,7 +61,7 @@ def vectfit_step(f, s, poles):
             else:
                 cindex[i] = 2
 
-    # First linear equation to solve. See Appendix A
+    # First linear equation to solve. See Appendix A (of what?)
     A = np.zeros((Ns, 2*N+2), dtype=np.complex64)
     for i, p in enumerate(poles):
         if cindex[i] == 0:
@@ -98,18 +98,19 @@ def vectfit_step(f, s, poles):
     for i, (ci, p) in enumerate(zip(cindex, poles)):
         if ci == 1:
             x, y = np.real(p), np.imag(p)
-            A[i, i] = A[i+1, i+1] = x
-            A[i, i+1] = -y
-            A[i+1, i] = y
-            b[i] = 2
-            b[i+1] = 0
+            A[i, i]     =  x
+            A[i+1, i+1] =  x
+            A[i, i+1]   = -y
+            A[i+1, i]   =  y
+            b[i]        =  2
+            b[i+1]      =  0
             #cv = c[i]
             #c[i,i+1] = np.real(cv), np.imag(cv)
 
     H = A - np.outer(b, c)
     H = np.real(H)
     new_poles = np.sort(eigvals(H))
-    unstable = np.real(new_poles) > 0
+    unstable  = np.real(new_poles) > 0
     new_poles[unstable] -= 2*np.real(new_poles)[unstable]
     return new_poles
 
@@ -139,7 +140,7 @@ def calculate_residues(f, s, poles, rcond=-1):
         else:
             raise RuntimeError("cindex[%s] = %s" % (i, cindex[i]))
 
-    A[:, N] = 1
+    A[:, N]   = 1
     A[:, N+1] = s
     # Solve Ax == b using pseudo-inverse
     b  = f
@@ -156,7 +157,7 @@ def calculate_residues(f, s, poles, rcond=-1):
     for i, ci in enumerate(cindex):
        if ci == 1:
            r1, r2 = x[i:i+2]
-           x[i] = r1 - 1j*r2
+           x[i]   = r1 - 1j*r2
            x[i+1] = r1 + 1j*r2
 
     residues = x[:N]
