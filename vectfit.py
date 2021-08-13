@@ -19,11 +19,16 @@ All credit goes to Bjorn Gustavsen for his MATLAB implementation, and the follow
 
 updated for Python 3 - RXA254, July-2021
 
+updated to incoporate freq-dependent weighting; 
+return answers in the zpk form instead of partial fraction expansion. 
+                                                        - HY, Aug-2021
+
 """
 __author__ = 'Phil Reinhold'
 
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.signal as sig
 
 #from pylab import *
 from numpy.linalg import eigvals, lstsq
@@ -37,16 +42,35 @@ def cc(z):
 def model(s, poles, residues, d, h):
     return sum(r/(s-p) for p, r in zip(poles, residues)) + d + s*h
 
-def vectfit_step(f, s, poles):
+def to_zpk(poles, residues, d, h):
+    """
+    HY: note that this vectfit returns in the partial fraction expansion form, 
+        which may not be the most intuitive form.
+        Here we further wrap it back to regular zpk form.
+    """
+    bb, aa = sig.invres(residues, poles, d)
+    zz, pp, kk = sig.tf2zpk(bb, aa)
+    return zz, pp, kk
+
+def vectfit_step(f, s, poles, ww=None):
     """
     f = complex data to fit
     s = j*frequency
     poles = initial poles guess
         note: All complex poles must come in sequential complex conjugate pairs
     returns adjusted poles
+    
+    ww = frequency-dependent weighting with same shape as f & s. 
+        note: ww is real & positive here
+        The weighting is added according to 
+        Gustavsen & Semlyen 1999, see discussion about fig. 18.
     """
     N  = len(poles)
     Ns = len(s)
+    
+    
+    if ww is None:
+        ww = np.ones(Ns)
 
     cindex = np.zeros(N)
     # cindex is:
@@ -82,7 +106,11 @@ def vectfit_step(f, s, poles):
     b = f
     A = np.vstack((np.real(A), np.imag(A)))
     b = np.concatenate((np.real(b), np.imag(b)))
-    x, residuals, rnk, s = lstsq(A, b, rcond=-1)
+    
+    ww = np.concatenate((ww, ww))
+    ww = np.diag(ww)
+    
+    x, residuals, rnk, s = lstsq(ww@A, ww@b, rcond=-1)
 
     residues = x[:N]
     d = x[N]
@@ -115,9 +143,12 @@ def vectfit_step(f, s, poles):
     return new_poles
 
 # Dear gods of coding style, I sincerely apologize for the following copy/paste
-def calculate_residues(f, s, poles, rcond=-1):
+def calculate_residues(f, s, poles, ww=None, rcond=-1):
     Ns = len(s)
     N  = len(poles)
+    
+    if ww is None:
+        ww = np.ones(Ns)    
 
     cindex = np.zeros(N)
     for i, p in enumerate(poles):
@@ -150,15 +181,19 @@ def calculate_residues(f, s, poles, rcond=-1):
     if cA > 1e13:
         print('Warning!: Ill Conditioned Matrix. Consider scaling the problem down')
         print('Cond(A)', cA)
-    x, residuals, rnk, s = lstsq(A, b, rcond=rcond)
+        
+    ww = np.concatenate((ww, ww))
+    ww = np.diag(ww)
+    
+    x, residuals, rnk, s = lstsq(ww@A, ww@b, rcond=rcond)
 
     # Recover complex values
     x = np.complex64(x)
     for i, ci in enumerate(cindex):
-       if ci == 1:
-           r1, r2 = x[i:i+2]
-           x[i]   = r1 - 1j*r2
-           x[i+1] = r1 + 1j*r2
+        if ci == 1:
+            r1, r2 = x[i:i+2]
+            x[i]   = r1 - 1j*r2
+            x[i+1] = r1 + 1j*r2
 
     residues = x[:N]
     d = x[N].real
@@ -172,7 +207,7 @@ def print_params(poles, residues, d, h):
     print("offset: {:g}".format(d))
     print("slope: {:g}".format(h))
 
-def vectfit_auto(f, s, n_poles = 10, n_iter = 10, printparams = False,
+def vectfit_auto(f, s, ww=None, n_poles = 10, n_iter = 10, printparams = False,
                  inc_real = False, loss_ratio = 1e-2, rcond = -1, track_poles = False):
 
     w          = np.imag(s)
@@ -185,10 +220,10 @@ def vectfit_auto(f, s, n_poles = 10, n_iter = 10, printparams = False,
 
     poles_list = []
     for _ in range(n_iter):
-        poles = vectfit_step(f, s, poles)
+        poles = vectfit_step(f, s, poles, ww=ww)
         poles_list.append(poles)
 
-    residues, d, h = calculate_residues(f, s, poles, rcond=rcond)
+    residues, d, h = calculate_residues(f, s, poles, ww=ww, rcond=rcond)
 
     if track_poles:
         return poles, residues, d, h, np.array(poles_list)
