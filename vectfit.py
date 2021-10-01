@@ -22,7 +22,10 @@ updated for Python 3 - RXA254, July-2021
 updated to incoporate freq-dependent weighting; 
 return answers in the zpk form instead of partial fraction expansion. 
                                                         - HY, Aug-2021
+                                                        
 
+updated to discard similar z-p pairs and z&p's in the low coherence regime. 
+                                                        - HY, Oct-2021
 """
 __author__ = 'Phil Reinhold'
 
@@ -251,6 +254,155 @@ def vectfit_auto_rescale(f, s, printparams=False, **kwargs):
         print('UNSCALED')
         print_params(poles, residues, d, h)
     return poles, residues, d, h
+
+
+# discard similar zpk pairs
+def discard_similar_pz(zpk_s, cut=0.05, f_match=0.):
+    """
+    If a pair of zeros is too close to a pair of poles, discard both of them.
+    """
+    
+    zz, pp, kk=zpk_s
+    
+    z1=np.where(np.imag(zz)>1e-6)
+    z1=zz[z1]
+    
+    z2=np.where(np.abs(np.imag(zz)) <= 1e-6)
+    z2=zz[z2]
+    
+    p1=np.where(np.imag(pp)>1e-6)
+    p1=pp[p1]
+    
+    p2=np.where(np.abs(np.imag(pp)) <= 1e-6)
+    p2=pp[p2]
+    
+    np1, np2=len(p1), len(p2)
+    nz1, nz2=len(z1), len(z2)
+    
+    z_del=[]
+    p_del=[]
+    for i in range(nz1):
+        j=np.argmin(np.abs(p1-z1[i]))
+        if (np.abs(p1[j]-z1[i])<cut) and (not j in p_del):
+            z_del.append(i)
+            p_del.append(j)
+            
+            kk*=(f_match-z1[i])*(f_match-np.conj(z1[i]))\
+                /(f_match-p1[j])/(f_match-np.conj(p1[j]))
+      
+
+    z1=np.delete(z1, z_del)
+    p1=np.delete(p1, p_del)
+    
+    idx_z=np.argsort(np.abs(z1))
+    z1 = z1[idx_z]
+    idx_p=np.argsort(np.abs(p1))
+    p1 = p1[idx_p]
+
+    zz = np.zeros(2 * len(z1) + len(z2), dtype=np.complex)
+    pp = np.zeros(2 * len(p1) + len(p2), dtype=np.complex)
+    
+    for i in range (len(z1)):
+        zz[2*i] = z1[i]
+        zz[2*i+1] = np.conj(z1[i])
+        
+    for i in range(len(p1)):
+        pp[2*i] = p1[i]
+        pp[2*i+1] = np.conj(p1[i])
+        
+    zz[2*len(z1):]=z2
+    pp[2*len(p1):]=p2
+
+    return (zz, pp, np.real(kk))
+
+def discard_features_low_coh(zpk_s, freq, coh, 
+                             coh_cut=0.5, f_match=0.):
+    """
+    for zeros/poles at frequencies where the coherence is below coh_cut
+    discard those zeros and poles
+    """
+    
+    for i in range(len(freq)):
+        coh_max_above_f = np.percentile(coh[i:], 95)
+        if coh_max_above_f < coh_cut:
+            break
+    w_cut = 2.*np.pi*freq[i]
+    
+
+    zz, pp, kk=zpk_s
+    
+    z1=np.where(np.imag(zz)>1e-6)
+    z1=zz[z1]
+    
+    z2=np.where(np.abs(np.imag(zz)) <= 1e-6)
+    z2=zz[z2]
+    
+    p1=np.where(np.imag(pp)>1e-6)
+    p1=pp[p1]
+    
+    p2=np.where(np.abs(np.imag(pp)) <= 1e-6)
+    p2=pp[p2]
+    
+    np1, np2=len(p1), len(p2)
+    nz1, nz2=len(z1), len(z2)
+    
+    z_del=[]
+    p_del=[]
+    for i in range(nz1):
+        if np.abs(z1[i])>w_cut:
+            z_del.append(i)
+            kk *= (f_match-z1[i])*(f_match-np.conj(z1[i]))
+            
+    for i in range(np1):
+        if np.abs(p1[i])>w_cut:
+            p_del.append(i)
+            kk /= (f_match-p1[i])*(f_match-np.conj(p1[i]))
+            
+    z1=np.delete(z1, z_del)
+    p1=np.delete(p1, p_del)
+    
+    idx_z=np.argsort(np.abs(z1))
+    z1 = z1[idx_z]
+    idx_p=np.argsort(np.abs(p1))
+    p1 = p1[idx_p]
+    
+    
+    z_del=[]
+    p_del=[]        
+    for i in range(nz2):
+        if np.abs(z2[i])>w_cut:
+            z_del.append(i)
+            kk *= (f_match-z2[i])
+            
+    for i in range(np2):
+        if np.abs(p2[i])>w_cut:
+            p_del.append(i)
+            kk *= (f_match-p2[i])
+            
+    z2=np.delete(z2, z_del)
+    p2=np.delete(p2, p_del)
+      
+    idx_z=np.argsort(np.abs(z2))
+    z2 = z2[idx_z]
+    idx_p=np.argsort(np.abs(p2))
+    p2 = p2[idx_p]   
+    
+    
+    zz = np.zeros(2 * len(z1) + len(z2), dtype=np.complex)
+    pp = np.zeros(2 * len(p1) + len(p2), dtype=np.complex)
+    
+    for i in range (len(z1)):
+        zz[2*i] = z1[i]
+        zz[2*i+1] = np.conj(z1[i])
+        
+    for i in range(len(p1)):
+        pp[2*i] = p1[i]
+        pp[2*i+1] = np.conj(p1[i])
+        
+    zz[2*len(z1):]=z2
+    pp[2*len(p1):]=p2
+
+    return (zz, pp, np.real(kk))
 
 
 
