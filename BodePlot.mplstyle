@@ -17,7 +17,7 @@ grid.alpha: 0.3
 lines.markersize: 12
 legend.borderpad: 0.2
 legend.fancybox: True
-legend.fontsize: small
+legend.fontsize: x-small
 legend.framealpha: 0.8
 legend.handletextpad: 0.5
 legend.labelspacing: 0.33
