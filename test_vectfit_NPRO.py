@@ -69,9 +69,10 @@ weight = np.abs(mytfdata) / (1e-9 + maa)
 weight /= np.max(weight)
 # weight = weight**0.5
 
-# I don't think this is used for anything yet
+# I don't think this is used for anything yet, but it should be
 coh = np.abs(mytfdata)**2 / (np.abs(nzz)**2 + np.abs(mytfdata)**2)
 
+# replace this with measured data
 mytfdata += nzz
 
 
