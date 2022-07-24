@@ -15,7 +15,7 @@ def get_res_g_pole_pair(f0, Q):
     rr = -w0/2/Q
     ii = np.sqrt(w0**2 - rr**2)
     return rr, ii
-    
+
 
 plt.style.use('BodePlot.mplstyle')
 
