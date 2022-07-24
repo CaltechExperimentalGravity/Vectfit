@@ -15,6 +15,7 @@ axes.grid:       True
 grid.color:      xkcd:Charcoal
 grid.alpha: 0.3
 lines.markersize: 12
+lines.markeredgecolor: None
 legend.borderpad: 0.2
 legend.fancybox: True
 legend.fontsize: x-small
