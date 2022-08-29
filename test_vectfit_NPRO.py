@@ -32,69 +32,87 @@ plt.style.use('BodePlot.mplstyle')
 
 # Create some test data using known poles and residues
 # Substitute your source of data as needed
+data_dir = 'data'
+dat = np.loadtxt(data_dir + '/' + 'Moku_PZT_wide_1.txt', comments = '%')
+
 
 # Note our independent variable lies along the imaginary axis
 ff = np.logspace(3, 6, 400)
 ww = 2 * np.pi * ff
 s  = 1j * ww
 
-
+toop = 'data'
 # generate a model to simulate
 
-# a collection of poles and zeros
-rr1, ii1 = get_res_g_pole_pair(13e3, 7)
-rr2, ii2 = get_res_g_pole_pair(37e3, 20)
-rr3, ii3 = get_res_g_pole_pair(55e3, 33)
-rr4, ii4 = get_res_g_pole_pair(57e3, 23)
-rr5, ii5 = get_res_g_pole_pair(49e3, 15)
+if toop == 'model':
+    # a collection of poles and zeros
+    rr1, ii1 = get_res_g_pole_pair(13e3, 7)
+    rr2, ii2 = get_res_g_pole_pair(37e3, 20)
+    rr3, ii3 = get_res_g_pole_pair(55e3, 33)
+    rr4, ii4 = get_res_g_pole_pair(57e3, 23)
+    rr5, ii5 = get_res_g_pole_pair(49e3, 15)
 
-p = np.array([rr1+1j*ii1, rr1-1j*ii1, rr3+1j*ii3, rr3-1j*ii3, rr5+1j*ii5, rr5-1j*ii5])
-z = np.array([rr2+1j*ii2, rr2-1j*ii2, rr4+1j*ii4, rr4-1j*ii4])
-k = (rr1**2.+ii1**2.)*(rr3**2.+ii3**2.)*(rr5**2.+ii5**2.)/(rr2**2.+ii2**2.)/(rr4**2.+ii4**2.)
-
-
-
-# this is a high pass filter
-zz, pp, kk = sig.ellip(4, 6, 30, 2*np.pi*64e3, 'high', analog=True, output='zpk')
-#rr4, ii4 = get_res_g_pole_pair(600, 23)
-#rr5, ii5 = get_res_g_pole_pair(800, 10)
-
-# multiply the TFs together
-z = np.concatenate([z, zz])
-p = np.concatenate([p, pp])
-k *= kk
-
-# this is the Transfer Function with no noise
-ww, mytfdata = sig.freqs_zpk(z, p, k, worN=ww)
-model = mytfdata.copy()
+    p = np.array([rr1+1j*ii1, rr1-1j*ii1, rr3+1j*ii3, rr3-1j*ii3, rr5+1j*ii5, rr5-1j*ii5])
+    z = np.array([rr2+1j*ii2, rr2-1j*ii2, rr4+1j*ii4, rr4-1j*ii4])
+    k = (rr1**2.+ii1**2.)*(rr3**2.+ii3**2.)*(rr5**2.+ii5**2.)/(rr2**2.+ii2**2.)/(rr4**2.+ii4**2.)
 
 
 
-# add some noise to the measurement
-# Gaussian in amplitude, uniform in phase
-mmm = 1e-4
-pho = np.random.uniform(-180, 180, len(ww))
-maa = np.random.normal(loc = mmm, scale = mmm/5, size=len(ww))
-nzz = maa * np.exp(1j * pho * np.pi/180)
+    # this is a high pass filter
+    zz, pp, kk = sig.ellip(4, 6, 30, 2*np.pi*64e3, 'high', analog=True, output='zpk')
+    #rr4, ii4 = get_res_g_pole_pair(600, 23)
+    #rr5, ii5 = get_res_g_pole_pair(800, 10)
+
+    # multiply the TFs together
+    z = np.concatenate([z, zz])
+    p = np.concatenate([p, pp])
+    k *= kk
+
+    # this is the Transfer Function with no noise
+    ww, mytfdata = sig.freqs_zpk(z, p, k, worN=ww)
+    model = mytfdata.copy()
+
+    # add some noise to the measurement
+    # Gaussian in amplitude, uniform in phase
+    mmm = 1e-4
+    pho = np.random.uniform(-180, 180, len(ww))
+    maa = np.random.normal(loc = mmm, scale = mmm/5, size=len(ww))
+    nzz = maa * np.exp(1j * pho * np.pi/180)
+
+
+#### measured data
+
+# flip data to start from tow f
+dat = np.flipud(dat)
+ff = dat[:,0]
+n = np.argwhere(ff < 1e6) # the data above 1 MHz is bunk
+ff = ff[n].reshape(-1)
+ww = 2 * np.pi * ff
+s  = 1j * ww
+
+
+mytfdata  = 10**(dat[n,1]/20)
+mytfdata  = mytfdata * np.exp(1j * dat[n,2] * np.pi/180)
+mytfdata = mytfdata.reshape(-1)
+#if __debug__:
+#    whos
 
 upsilon = 1e-9 # this is to prevent divide by zero stuff
-weight = np.abs(mytfdata) / (upsilon + maa)
+weight = np.abs(mytfdata) / (upsilon)
 weight /= np.max(weight)
 # weight = weight**0.5
 
 # I don't think this is used for anything yet, but it should be
-coh = np.abs(mytfdata)**2 / (np.abs(nzz)**2 + np.abs(mytfdata)**2)
+#coh = np.abs(mytfdata)**2 / (np.abs(nzz)**2 + np.abs(mytfdata)**2)
 
 # inverting the above coherence eq to get SNR
-SNR_data = coh / (1 - coh)
+#SNR_data = coh / (1 - coh)
 
 # maybe make the weighting more serious?
 #SNR_data = SNR_data**2
 
 # replace this with measured data
-mytfdata += nzz # add noise to the noiseless TF
-
-
+#mytfdata += nzz # add noise to the noiseless TF
 
 # d == offset, h == slope
 #d = .2
@@ -112,7 +130,8 @@ poles, residues, d, h = vf.vectfit_auto_rescale(mytfdata, s, printparams=False, 
 zz, pp, kk = vf.to_zpk(poles, residues, d, h)
 
 # (W) weight. Weight it by the amplitude SNR
-p_w, r_w, d_w, h_w = vf.vectfit_auto_rescale(mytfdata, s, ww=SNR_data, printparams=False, n_poles=n_poles)
+p_w, r_w, d_w, h_w = vf.vectfit_auto_rescale(mytfdata, s, ww=weight, printparams=False, n_poles=n_poles)
+p_w, r_w, d_w, h_w = vf.vectfit_auto_rescale(mytfdata, s, ww=weight, printparams=False, n_poles=n_poles)
 # convert fraction expansion to zpk
 z_w, p_w, k_w = vf.to_zpk(p_w, r_w, d_w, h_w)
 #print(len(p_w), len(p), len(z_w), len(z), k, k_w)
@@ -133,9 +152,9 @@ z_co, p_co, k_co = zpk_c
 # discard z's and p's that are in the low coherence regime
 coh_cut = 0.5
 #zpk_c = (z_co, p_co, k_co)
-zpk_c = vf.discard_features_low_coh(zpk_c, ff, coh, 
-                             coh_cut = coh_cut, f_match = 1.)
-z_c, p_c, k_c = zpk_c
+#zpk_c = vf.discard_features_low_coh(zpk_c, ff, coh, 
+#                             coh_cut = coh_cut, f_match = 1.)
+#z_c, p_c, k_c = zpk_c
 #print(" ")
 #print("Cutoff features in regions of coherence " + r"< {coh:0.1f}".format(coh = coh_cut) + ".")
 #print(len(p_c), len(p), len(z_c), len(z), k, k_c)
@@ -146,17 +165,17 @@ t_elapsed = timer() - t_0
 print('Elapsed time = {t:0.2f} seconds.'.format(t = t_elapsed))
 
 tab = PrettyTable(['Fit Type', '# of poles', "# of zeros"])
-tab.add_row(['Model',                  len(p),    len(z)])
+#tab.add_row(['Model',                  len(p),    len(z)])
 tab.add_row(['no weight',              len(pp),   len(zz)])
 tab.add_row(['SNR weight',             len(p_w),  len(z_w)])
 tab.add_row(['SNR weight + colocated', len(p_co), len(z_co)])
-tab.add_row(['SNR + co + cleaning',    len(p_c),  len(z_c)])
+#tab.add_row(['SNR + co + cleaning',    len(p_c),  len(z_c)])
 print(tab)
 
 
 __, fitted   = sig.freqs_zpk(zz,  pp,  kk, worN=ww)
 __, fitted_w = sig.freqs_zpk(z_w, p_w, k_w, worN=ww)
-__, fitted_c = sig.freqs_zpk(z_c, p_c, k_c, worN=ww)
+__, fitted_c = sig.freqs_zpk(z_co, p_co, k_co, worN=ww)
 
 
 bb, aa = sig.invres(r_w, p_w, d_w)
@@ -169,43 +188,43 @@ err   = mytfdata/fitted - 1
 err_w = mytfdata/fitted_w - 1
 
 # fractional error of fit w.r.t. model
-err_c = fitted_c/model - 1
+err_c = mytfdata/fitted_c - 1
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 # ===============================================================
 # plot the results of the simulation and the fits and residuals
-fig,ax = plt.subplots(3,1,sharex=True, figsize=(10,10),
-                      gridspec_kw={'height_ratios': [1, 0.5, 0.3]})
+fig,ax = plt.subplots(2,1,sharex=True, figsize=(10,10),
+                      gridspec_kw={'height_ratios': [1, 0.5]})
 
 
 ax[0].loglog(ff, np.abs(mytfdata),
-        ls='', marker='.', alpha=0.3, color='xkcd:Burple', label='Data')
+        ls='', marker='.', alpha=0.6, color='xkcd:Burple', label='Data')
 ax[0].loglog(ff, np.abs(fitted),
         alpha=0.5,
     label='Fit (no weight; %i poles, %i zeros)'%(len(pp), len(zz)))
 ax[0].loglog(ff, np.abs(fitted_w),
-        alpha=0.5,
+        alpha=0.3,
         label='Fit (w weight; %i poles, %i zeros)'%(len(p_w), len(z_w)))
 ax[0].loglog(ff, np.abs(fitted_c),
-        alpha=0.9, label='Fit (w weight+discarding; %i poles, %i zeros)'%(len(p_c), len(z_c)))
-ax[0].loglog(ff, np.abs(model),
-        alpha=0.7, ls='--', color='xkcd:Black',
-             label='Model (%i poles, %i zeros)'%(len(p), len(z)))
+             alpha=0.7, label='Fit (w weight+discarding; %i poles, %i zeros)'%(len(p_co), len(z_co)))
+#ax[0].loglog(ff, np.abs(model),
+#        alpha=0.7, ls='--', color='xkcd:Black',
+#             label='Model (%i poles, %i zeros)'%(len(p), len(z)))
 # ax[0].loglog(ff, np.abs(err), alpha=0.3, label='Residual (no)')
 ax[0].loglog(ff, np.abs(err_c),
         ls='', marker='.', alpha=0.3,
-             label='Residual (Fit/Model - 1)')
+             label='Residual (Data/Fit - 1)')
 ax[0].set_ylabel('Mag')
 ax[0].legend()
 
 ax[1].semilogx(ff, np.angle(mytfdata, deg=True),
-               ls='', marker='.', alpha=0.3, color='xkcd:Burple')
-ax[1].semilogx(ff, np.angle(fitted,   deg = True), alpha = 0.5)
-ax[1].semilogx(ff, np.angle(fitted_w, deg = True), alpha = 0.5)
-ax[1].semilogx(ff, np.angle(fitted_c, deg = True), alpha = 0.9)
-ax[1].semilogx(ff, np.angle(model, deg=True),
-               alpha=0.7, ls='--',color='xkcd:Black')
+               ls='', marker='.', alpha=0.6, color='xkcd:Burple')
+ax[1].semilogx(ff, np.angle(fitted,   deg = True), alpha = 0.25)
+ax[1].semilogx(ff, np.angle(fitted_w, deg = True), alpha = 0.25)
+ax[1].semilogx(ff, np.angle(fitted_c, deg = True), alpha = 0.7)
+#ax[1].semilogx(ff, np.angle(model, deg=True),
+#               alpha=0.7, ls='--',color='xkcd:Black')
 # ax[1].semilogx(ff, np.angle(err,   deg=True), alpha = 0.3)
 ax[1].semilogx(ff, np.angle(err_c, deg=True),
                ls='', marker='.', alpha = 0.3)
@@ -213,9 +232,9 @@ ax[1].set_yticks([-180, -90, 0, 90, 180])
 ax[1].set_ylabel('Phase [deg]')
 
 
-ax[2].semilogx(ff, coh, alpha=0.7, color='xkcd:Burple')
-ax[2].set_ylabel('Coherence')
-ax[2].set_xlabel('Frequency [Hz]')
+#ax[2].semilogx(ff, coh, alpha=0.7, color='xkcd:Burple')
+#ax[2].set_ylabel('Coherence')
+ax[1].set_xlabel('Frequency [Hz]')
 
 
 
