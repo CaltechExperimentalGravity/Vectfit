@@ -145,17 +145,4 @@ python test_vectfit_auto.py
 
 Distributed under the [GPL-2.0 License](LICENSE).
 
-## Contributing
-
-Contributions are highly encouraged, especially improvements, examples, bug fixes, and additional test cases.
-
-1. Fork the repository.
-2. Create a branch (`git checkout -b feature/my-feature`).
-3. Commit changes (`git commit -am "My descriptive message"`).
-4. Push to GitHub (`git push origin feature/my-feature`).
-5. Submit a Pull Request detailing your changes.
-
-## Support and Issues
-
-For questions, bugs, or feature requests, open an issue directly on [GitHub Issues](https://github.com/CaltechExperimentalGravity/Vectfit/issues).
 
